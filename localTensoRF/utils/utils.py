@@ -199,7 +199,7 @@ def visualize_depth(depth, minmax=None, cmap=cv2.COLORMAP_JET):
 
 def N_to_reso(n_voxels, bbox):
     xyz_min, xyz_max = bbox
-    voxel_size = ((xyz_max - xyz_min).prod() / n_voxels).pow(1 / 3)
+    voxel_size = ((xyz_max - xyz_min).prod() / n_voxels).pow(1 / 3) # 这里固定了dim为3，原版中为.pow(1/dim)
     return ((xyz_max - xyz_min) / voxel_size).long().tolist()
 
 

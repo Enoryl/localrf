@@ -223,13 +223,13 @@ def reconstruction(args):
     train_dataset = LocalRFDataset(
         f"{args.datadir}",
         split="train",
-        downsampling=args.downsampling,
+        downsampling=args.downsampling, # 输入为-1
         test_frame_every=args.test_frame_every,
-        load_depth=args.loss_depth_weight_inital > 0,
-        load_flow=args.loss_flow_weight_inital > 0,
+        load_depth=args.loss_depth_weight_inital > 0, # loss_depth_weight_inital=0.1，为True
+        load_flow=args.loss_flow_weight_inital > 0, # loss_flow_weight_inital=1，为True
         with_preprocessed_poses=args.with_preprocessed_poses,
-        n_init_frames=args.n_init_frames,
-        subsequence=args.subsequence,
+        n_init_frames=args.n_init_frames, # 这里传入的参数为5
+        subsequence=args.subsequence, # 这里的参数输入为[0, -1]
         frame_step=args.frame_step,
     )
     test_dataset = LocalRFDataset(
@@ -240,15 +240,15 @@ def reconstruction(args):
         downsampling=args.downsampling,
         test_frame_every=args.test_frame_every,
         with_preprocessed_poses=args.with_preprocessed_poses,
-        subsequence=args.subsequence,
+        subsequence=args.subsequence, # 这里的参数输入为[0, -1]
         frame_step=args.frame_step,
     )
     near_far = train_dataset.near_far
 
     # init resolution
-    upsamp_list = args.upsamp_list
-    n_lamb_sigma = args.n_lamb_sigma
-    n_lamb_sh = args.n_lamb_sh
+    upsamp_list = args.upsamp_list # [100, 150, 200, 250, 300] 相比原版TensoRF更少了
+    n_lamb_sigma = args.n_lamb_sigma # [8, 8, 8] 相比原版TensoRF消减了一半
+    n_lamb_sh = args.n_lamb_sh # [24, 24, 24] 相比原版TensoRF消减了一半
 
     logfolder = f"{args.logdir}"
 
@@ -257,8 +257,8 @@ def reconstruction(args):
     writer = SummaryWriter(log_dir=logfolder)
 
     # init parameters
-    aabb = train_dataset.scene_bbox.to(args.device)
-    reso_cur = N_to_reso(args.N_voxel_init, aabb)
+    aabb = train_dataset.scene_bbox.to(args.device) # [[-2.0, -2.0, -2.0], [2.0, 2.0, 2.0]]
+    reso_cur = N_to_reso(args.N_voxel_init, aabb) # 计算分辨率，与原TensoRF相同
 
     # TODO: Add midpoint loading
     # if args.ckpt is not None:
@@ -270,8 +270,8 @@ def reconstruction(args):
     # else:
 
     print("lr decay", args.lr_decay_target_ratio)
-
-    # linear in logrithmic space
+    # 原版于此处根据输入的ckpt参数进行加载/创建模型的操作
+    # linear in logrithmic space，与原版相同
     N_voxel_list = (
         torch.round(
             torch.exp(
@@ -283,10 +283,13 @@ def reconstruction(args):
             )
         ).long()
     ).tolist()[1:]
+
+    # 这段原版没有
     N_voxel_list = {
         usamp_idx: round(N_voxel**(1/3))**3 for usamp_idx, N_voxel in zip(upsamp_list, N_voxel_list)
     }
 
+    # with_processed_poses是新添加的参数
     if args.with_preprocessed_poses:
         camera_prior = {
             "rel_poses": torch.from_numpy(train_dataset.rel_poses).to(args.device),
@@ -295,7 +298,8 @@ def reconstruction(args):
     else:
         camera_prior = None
 
-
+    # 直接创建模型，这里似乎直接将加载和创建模型的操作分在了train和test两个分支中
+    # reso_cur、device两个参数没有直接的传入表示，可能在LocalTensorfs内部直接定义了值或者包含在了其它变量中传入
     local_tensorfs = LocalTensorfs(
         camera_prior=camera_prior,
         fov=args.fov,
@@ -315,45 +319,51 @@ def reconstruction(args):
         update_AlphaMask_list=args.update_AlphaMask_list,
         lr_upsample_reset=args.lr_upsample_reset,
         device=args.device,
-        alphaMask_thres=args.alpha_mask_thre,
-        shadingMode=args.shadingMode,
-        aabb=aabb,
+        alphaMask_thres=args.alpha_mask_thre, # 原版含有此参数
+        shadingMode=args.shadingMode, # 原版含有此参数
+        aabb=aabb, # 原版含有此参数
         gridSize=reso_cur,
-        density_n_comp=n_lamb_sigma,
-        appearance_n_comp=n_lamb_sh,
-        app_dim=args.data_dim_color,
-        near_far=near_far,
-        density_shift=args.density_shift,
-        distance_scale=args.distance_scale,
+        density_n_comp=n_lamb_sigma, # 原版含有此参数
+        appearance_n_comp=n_lamb_sh, # 原版含有此参数
+        app_dim=args.data_dim_color, # 原版含有此参数
+        near_far=near_far, # 原版含有此参数
+        density_shift=args.density_shift, # 原版含有此参数
+        distance_scale=args.distance_scale, # 原版含有此参数
         rayMarch_weight_thres=args.rm_weight_mask_thre,
-        pos_pe=args.pos_pe,
-        view_pe=args.view_pe,
-        fea_pe=args.fea_pe,
-        featureC=args.featureC,
-        step_ratio=args.step_ratio,
-        fea2denseAct=args.fea2denseAct,
+        pos_pe=args.pos_pe, # 原版含有此参数
+        view_pe=args.view_pe, # 原版含有此参数
+        fea_pe=args.fea_pe, # 原版含有此参数
+        featureC=args.featureC, # 原版含有此参数
+        step_ratio=args.step_ratio, # 原版含有此参数
+        fea2denseAct=args.fea2denseAct, # 原版含有此参数
     )
     local_tensorfs = local_tensorfs.to(args.device)
 
     torch.cuda.empty_cache()
 
-    tvreg = TVLoss()
-    W, H = train_dataset.img_wh
+    tvreg = TVLoss() # 初始化TV Loss
+    W, H = train_dataset.img_wh # 图片尺寸
 
     training = True
-    n_added_frames = 0
-    last_add_iter = 0
-    iteration = 0
+    n_added_frames = 0 # 默认为0
+    last_add_iter = 0 # 默认为0
+    iteration = 0 # 默认为0
     metrics = {}
-    start_time = time.time()
+    start_time = time.time() # 计时
     while training:
+        # 这里的lr_R_init和lr_t_init输入总大于0，因此otimize_poses总为True
         optimize_poses = args.lr_R_init > 0 or args.lr_t_init > 0
+        # 这里的data_blob应该是进行一次训练数据集的采样，并整合
+        # batch_size=4096，is_refining默认为False，optimize_poses应该总是为True
         data_blob = train_dataset.sample(args.batch_size, local_tensorfs.is_refining, optimize_poses)
-        view_ids = torch.from_numpy(data_blob["view_ids"]).to(args.device)
+        # 下面是将得到的数据转换为tensor并拆分到各个变量中保存
+        view_ids = torch.from_numpy(data_blob["view_ids"]).to(args.device) # 用于local_tensorfs的输入
         rgb_train = torch.from_numpy(data_blob["rgbs"]).to(args.device)
         loss_weights = torch.from_numpy(data_blob["loss_weights"]).to(args.device)
-        train_test_poses = data_blob["train_test_poses"]
-        ray_idx = torch.from_numpy(data_blob["idx"]).to(args.device)
+        train_test_poses = data_blob["train_test_poses"] # 用于local_tensorfs的输入
+        ray_idx = torch.from_numpy(data_blob["idx"]).to(args.device) # 用于local_tensorfs的输入
+
+        # lr_factor=1，每次以rf_iter的最后一个元素为指数进行运算
         reg_loss_weight = local_tensorfs.lr_factor ** (local_tensorfs.rf_iter[-1])
 
         rgb_map, depth_map, directions, ij = local_tensorfs(
@@ -365,14 +375,15 @@ def reconstruction(args):
             test_id=train_test_poses,
         )
 
-        # loss
+        # loss 损失
+        # 计算rgb上的loss
         loss = 0.25 * ((torch.abs(rgb_map - rgb_train)) * loss_weights) / loss_weights.mean()
                
         loss = loss.mean()
         total_loss = loss
         writer.add_scalar("train/rgb_loss", loss, global_step=iteration)
 
-        ## Regularization
+        ## Regularization 回归
         # Get rendered rays schedule
         if local_tensorfs.regularize and args.loss_flow_weight_inital > 0 or args.loss_depth_weight_inital > 0:
             depth_map = depth_map.view(view_ids.shape[0], -1)
@@ -381,9 +392,9 @@ def reconstruction(args):
 
             writer.add_scalar("train/reg_loss_weights", reg_loss_weight, global_step=iteration)
 
-        # Optical flow
+        # Optical flow 光流损失
         if local_tensorfs.regularize and args.loss_flow_weight_inital > 0:
-            if args.fov == 360:
+            if args.fov == 360: # 没有实现fov为360情况下的光流损失计算
                 raise NotImplementedError
             starting_frame_id = max(train_dataset.active_frames_bounds[0] - 1, 0)
             cam2world = local_tensorfs.get_cam2world(starting_id=starting_frame_id)
@@ -409,7 +420,7 @@ def reconstruction(args):
             total_loss = total_loss + flow_loss
             writer.add_scalar("train/flow_loss", flow_loss, global_step=iteration)
 
-        # Monocular Depth 
+        # Monocular Depth 深度损失计算
         if local_tensorfs.regularize and args.loss_depth_weight_inital > 0:
             if args.fov == 360:
                 raise NotImplementedError
@@ -422,22 +433,27 @@ def reconstruction(args):
             total_loss = total_loss + depth_loss 
             writer.add_scalar("train/depth_loss", depth_loss, global_step=iteration)
 
+        # 这里regularize默认为True，也是损失计算相关的内容
         if  local_tensorfs.regularize:
             loss_tv, l1_loss = local_tensorfs.get_reg_loss(tvreg, args.TV_weight_density, args.TV_weight_app, args.L1_weight)
             total_loss = total_loss + loss_tv + l1_loss
             writer.add_scalar("train/loss_tv", loss_tv, global_step=iteration)
             writer.add_scalar("train/l1_loss", l1_loss, global_step=iteration)
 
-        # Optimizes
-        if train_test_poses:
-            can_add_rf = False
+        # Optimizes 优化
+        # train_test_poses为True的概率与test在数据集中所占的比例相同
+        if train_test_poses: # 可以理解为如果为test
+            can_add_rf = False # 那么这次不能添加rf网络
             if optimize_poses:
-                local_tensorfs.optimizer_step_poses_only(total_loss)
-        else:
+                local_tensorfs.optimizer_step_poses_only(total_loss) # 似乎是仅优化位姿？
+        else: # 反之，则调用optimizer_step，其中最后对can_add_rf进行了计算
             can_add_rf = local_tensorfs.optimizer_step(total_loss, optimize_poses)
+            # training初始为True，在后面的can_add_rf相关的分支中，如果can_add_rf为False，则会被设置为False
+            # 后面这一部分也许也是到达边界的表示
             training |= train_dataset.active_frames_bounds[1] != train_dataset.num_images
 
         ## Progressive optimization
+        # 这里的is_refining总为False
         if not local_tensorfs.is_refining:
             should_refine = (not train_dataset.has_left_frames() or (
                 n_added_frames > args.n_overlap and (
@@ -454,25 +470,33 @@ def reconstruction(args):
             should_add_frame &= not local_tensorfs.is_refining
             # Add supervising frames
             if should_add_frame:
+                # 这里调用了append_frame()和activate_frames()
                 local_tensorfs.append_frame()
                 train_dataset.activate_frames()
+                # 记录需要添加的帧数量
                 n_added_frames += 1
+                # 记录本次添加的迭代序号
                 last_add_iter = iteration
 
         # Add new RF
-        if can_add_rf:
+        if can_add_rf: # 如果判断可以添加新的rf
             if train_dataset.has_left_frames():
                 local_tensorfs.append_rf(n_added_frames)
+                # 需要添加的帧数量归零
                 n_added_frames = 0
+                # 这个后面也没用到阿
                 last_add_rf_iter = iteration
 
                 # Remove supervising frames
+                # 这里是training_frames的初次声明
                 training_frames = (local_tensorfs.blending_weights[:, -1] > 0)
                 train_dataset.deactivate_frames(
                     np.argmax(training_frames.cpu().numpy(), axis=0))
             else:
+                # 这个分支会修改training
                 training = False
         ## Log
+        # 下面是一些记录日志的操作
         loss = loss.detach().item()
 
         writer.add_scalar(
@@ -526,6 +550,7 @@ def reconstruction(args):
             )
 
         # Print the current values of the losses.
+        # 这里应该也是一些loss
         if iteration % args.progress_refresh_rate == 0:
             # All poses visualization
             poses_mtx = local_tensorfs.get_cam2world().detach().cpu()
@@ -543,6 +568,7 @@ def reconstruction(args):
             print(f"Iteration {iteration:06d}: {ips:.2f} it/s")
             start_time = time.time()
 
+        # 如果到达了需要渲染的迭代次数，进行渲染的操作
         if (iteration % args.vis_every == args.vis_every - 1):
             poses_mtx = local_tensorfs.get_cam2world().detach()
             rgb_maps_tb, depth_maps_tb, gt_rgbs_tb, fwd_flow_cmp_tb, bwd_flow_cmp_tb, depth_err_tb, loc_metrics = render(
@@ -629,12 +655,15 @@ def reconstruction(args):
                     # Clear all TensorBoard's lists
                     for list_tb in [rgb_maps_tb, depth_maps_tb, gt_rgbs_tb, fwd_flow_cmp_tb, bwd_flow_cmp_tb, depth_err_tb]:
                         list_tb.clear()
-
+            # 此处仍在渲染的if分支内
+            # 然后临时保存一下
             with open(f"{logfolder}/checkpoints_tmp.th", "wb") as f:
                 local_tensorfs.save(f)
-
+        # 迭代次数自增
         iteration += 1
 
+    # 此处开始为训练完毕后
+    # 正式的保存
     with open(f"{logfolder}/checkpoints.th", "wb") as f:
         local_tensorfs.save(f)
 

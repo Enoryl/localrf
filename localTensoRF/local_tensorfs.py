@@ -28,6 +28,7 @@ def ids2pixel(W, H, ids):
     row = (ids // W) % H
     return col, row
 
+# 后面的hexplane修改可能主要修改这个类的使用
 class LocalTensorfs(torch.nn.Module):
     """
     Self calibrating local tensorfs.
@@ -76,8 +77,8 @@ class LocalTensorfs(torch.nn.Module):
 
         self.lr_factor = 1
         self.regularize = True
-        self.n_iters_reg = self.n_iters_reg_per_frame
-        self.n_iters = self.n_iters_per_frame
+        self.n_iters_reg = self.n_iters_reg_per_frame # 600
+        self.n_iters = self.n_iters_per_frame # 600
         self.update_AlphaMask_list = update_AlphaMask_list
         self.N_voxel_list = N_voxel_list
 
@@ -146,6 +147,7 @@ class LocalTensorfs(torch.nn.Module):
         self.rf_optimizer = (torch.optim.Adam(grad_vars, betas=(0.9, 0.99)))
    
     def append_frame(self):
+        # 不是很懂
         if len(self.r_c2w) == 0:
             self.r_c2w.append(torch.eye(3, 2, device=self.device))
             self.t_c2w.append(torch.zeros(3, device=self.device))
@@ -172,6 +174,7 @@ class LocalTensorfs(torch.nn.Module):
             self.r_c2w[-1] = last_r_c2w @ rel_pose[:3, :3]
             self.t_c2w[-1].data += last_r_c2w @ rel_pose[:3, 3]
             
+        # 参数为：要优化的参数、用于计算梯度的平均和平方的系数、学习率
         self.r_optimizers.append(torch.optim.Adam([self.r_c2w[-1]], betas=(0.9, 0.99), lr=self.lr_R_init)) 
         self.t_optimizers.append(torch.optim.Adam([self.t_c2w[-1]], betas=(0.9, 0.99), lr=self.lr_t_init)) 
         self.exp_optimizers.append(torch.optim.Adam([self.exposure[-1]], betas=(0.9, 0.99), lr=self.lr_exposure_init)) 
@@ -185,7 +188,7 @@ class LocalTensorfs(torch.nn.Module):
         loss.backward()
 
         # Optimize poses
-        for idx in range(len(self.r_optimizers)):
+        for idx in range(len(self.r_optimizers)): # 对所有的optimizers
             if self.pose_linked_rf[idx] == len(self.rf_iter) - 1 and self.rf_iter[-1] < self.n_iters:
                 self.r_optimizers[idx].step()
                 self.t_optimizers[idx].step()
@@ -201,7 +204,7 @@ class LocalTensorfs(torch.nn.Module):
             n_training_frames = (self.blending_weights[:, -1] > 0).sum()
             self.n_iters = int(self.n_iters_per_frame * n_training_frames)
             self.n_iters_reg = int(self.n_iters_reg_per_frame * n_training_frames)
-            self.lr_factor = self.lr_decay_target_ratio ** (1 / self.n_iters)
+            self.lr_factor = self.lr_decay_target_ratio ** (1 / self.n_iters) # 0.1 ** (1 / 600)
             self.N_voxel_list = {int(key * n_training_frames): self.N_voxel_per_frame_list[key] for key in self.N_voxel_per_frame_list}
             self.update_AlphaMask_list = [int(update_AlphaMask * n_training_frames) for update_AlphaMask in self.update_AlphaMask_per_frame_list]
 
@@ -379,6 +382,10 @@ class LocalTensorfs(torch.nn.Module):
     def center(self, W, H):
         return torch.Tensor([W, H]).to(self.center_rel) * self.center_rel
 
+    # 最为重要的forward函数
+    # 在train中接收到ray_ids、view_ids、W、H、is_train=True和test_id之后
+    # 是如何运算出rgb_map、depth_map、directions、ij的？
+    # 可以继续向前查看此类的__init__函数
     def forward(
         self,
         ray_ids,
@@ -394,60 +401,97 @@ class LocalTensorfs(torch.nn.Module):
         test_id=False,
         floater_thresh=0,
     ):
+        # 从射线中回归像素坐标？
         i, j = ids2pixel(W, H, ray_ids)
+        # 如果fov为360（通常不会设置360的fov？，不会进入这个分支）
         if self.fov == 360:
             directions = get_ray_directions_360(i, j, W, H)
         else:
+            # 因为fov不会设置为360，应当会进入这里
+            # 返回一个tensor
             directions = get_ray_directions_lean(i, j, self.focal(W), self.center(W, H))
 
-        if blending_weights is None:
+        if blending_weights is None: # 没有传入blending_weights，因此会进入这里
+            # self中的blending_weights为torch.nn.Parameter(torch,ones([1, 1]))
             blending_weights = self.blending_weights[view_ids].clone()
-        if cam2world is None:
+        if cam2world is None: # 没有传入cam2world，因此会进入这里
             cam2world = self.get_cam2world(view_ids)
-        if world2rf is None:
+        if world2rf is None: # 没有传入world2rf，因此会进入这里
+            # 对于world2rf只是简单的把None复制过去了
             world2rf = self.world2rf
 
         # Train a single RF at a time
         if is_train:
+            # blending_weights的最后一列全设置为1
             blending_weights[:, -1] = 1
+            # blending_weights除了最后一列之外的全设置为0
             blending_weights[:, :-1] = 0
 
+        # 创建此处的active_rf_ids
         if is_train:
+            # 若is_train，则其为长度为tensorfs-1的空列表，tensorfs初始化时为torch.nn.ParameterList()
             active_rf_ids = [len(self.tensorfs) - 1]
         else:
+            # torch.nonzero返回非0元素的索引坐标
+            # 若非is_train，则将blending_weights在纵向上求和后取值不为0的坐标，然后去第一行（？）转为列表保存到active_rf_ids
             active_rf_ids = torch.nonzero(torch.sum(blending_weights, dim=0))[:, 0].tolist()
+        # ij就是将ij在dim=1上stack起来
         ij = torch.stack([i, j], dim=-1)
+        # 如果没有正在活跃的rf，则直接返回，通常来说不会运行到此分支
         if len(active_rf_ids) == 0:
             print("****** No valid RF")
             return torch.ones([ray_ids.shape[0], 3]), torch.ones_like(ray_ids).float(), torch.ones_like(ray_ids).float(), directions, ij
 
+        # 创建cam2rfs、initial_devices两个变量（字典和列表）
         cam2rfs = {}
         initial_devices = []
+        # 对活跃中的每个rf进行如下操作
         for rf_id in active_rf_ids:
+            # 将cam2world复制到cam2rf
+            # 在前面的代码里，若没有传入cam2world，则通过get_cam2world(view_ids)计算cam2world
+            # 注意此处不是上面创建的cam2rfs！（少了个s!)
             cam2rf = cam2world.clone()
+            # 对cam2rf进行处理，相应位置加上world2rf
+            # 在前面的代码里，若没有传入world2rf，则直接保存self.world2rf
+            # self.world2rf是一个torch.nn.ParameterList()
             cam2rf[:, :3, 3] += world2rf[rf_id]
 
+            # 保存处理完毕的cam2rf到cam2rfs，其索引为对应的rf_id
             cam2rfs[rf_id] = cam2rf
             
+            # 记录当前rf所在的设备
             initial_devices.append(self.tensorfs[rf_id].device)
+            # 如果它和view_ids所在的设备不同，则转移tensorfs到对应设备上
             if initial_devices[-1] != view_ids.device:
                 self.tensorfs[rf_id].to(view_ids.device)
 
+        # 对于cam2rfs中的每个key进行如下操作
         for key in cam2rfs:
+            # 用repeat_interleave对向量进行展平，参数为ray_ids第一维度的尺寸整除view_ids第一维度的尺寸
             cam2rfs[key] = cam2rfs[key].repeat_interleave(ray_ids.shape[0] // view_ids.shape[0], dim=0)
+        
+        # 也对blending_weights_expanded用repeat_interleave进行扩展
         blending_weights_expanded = blending_weights.repeat_interleave(ray_ids.shape[0] // view_ids.shape[0], dim=0)
+        # 以directions的shape为模板创建rgbs
         rgbs = torch.zeros_like(directions) 
+        # 以directions去掉channel维度的形状为模板创建depth_maps 
         depth_maps = torch.zeros_like(directions[..., 0]) 
+        # 创建N_rays_all
         N_rays_all = ray_ids.shape[0]
+        # 修改chunk值，其初始值（如过没有传入的话）为16384
         chunk = chunk // len(active_rf_ids)
+        # 这个循环的边界条件不是很懂
         for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
             if chunk_idx != 0:
                 torch.cuda.empty_cache()
+            # 创建directions_chunk
             directions_chunk = directions[chunk_idx * chunk : (chunk_idx + 1) * chunk]
+            # 创建blending_weights_chunk
             blending_weights_chunk = blending_weights_expanded[
                 chunk_idx * chunk : (chunk_idx + 1) * chunk
             ]
-
+            # ---------------------------------------------------------------------------------
+            # 注意这里！，向active_rf_ids所指向的TensoRF传入数据并取得输出
             for rf_id in active_rf_ids:
                 blending_weight_chunk = blending_weights_chunk[:, rf_id]
                 cam2rf = cam2rfs[rf_id][chunk_idx * chunk : (chunk_idx + 1) * chunk]
@@ -455,6 +499,7 @@ class LocalTensorfs(torch.nn.Module):
                 rays_o, rays_d = get_rays_lean(directions_chunk, cam2rf)
                 rays = torch.cat([rays_o, rays_d], -1).view(-1, 6)
 
+                # 需要传入的数据项只有ray，其他的均为参数
                 rgb_map_t, depth_map_t = self.tensorfs[rf_id](
                     rays,
                     is_train=is_train,
@@ -463,7 +508,9 @@ class LocalTensorfs(torch.nn.Module):
                     refine=self.is_refining,
                     floater_thresh=floater_thresh,
                 )
+                # 模型得到rgb_map_t、depth_map_t
 
+                # 一些后续操作，应该是将得到的数据保存到容器中
                 rgbs[chunk_idx * chunk : (chunk_idx + 1) * chunk] = (
                     rgbs[chunk_idx * chunk : (chunk_idx + 1) * chunk] + 
                     rgb_map_t * blending_weight_chunk[..., None]
@@ -473,13 +520,17 @@ class LocalTensorfs(torch.nn.Module):
                     depth_map_t * blending_weight_chunk
                 )
 
+        # 对每个元素
         for rf_id, initial_device in zip(active_rf_ids, initial_devices):
+            # 这里应当也是设备切换的操作
             if initial_device != view_ids.device:
                 self.tensorfs[rf_id].to(initial_device)
                 torch.cuda.empty_cache()
 
+        # lr_exposure_init的传入参数为1e-3，应当会进入这个分支
         if self.lr_exposure_init > 0:
             # TODO: cleanup
+            # test_id和传入的train_test_poses有关
             if test_id:
                 view_ids_m = torch.maximum(view_ids - 1, torch.tensor(0, device=view_ids.device))
                 view_ids_m[view_ids_m==view_ids] = 1
@@ -491,9 +542,13 @@ class LocalTensorfs(torch.nn.Module):
                 exposure = (exposure_stacked[view_ids_m] + exposure_stacked[view_ids_p]) / 2  
             else:
                 exposure = torch.stack(list(self.exposure), dim=0)[view_ids]
-                
+            # 对exposure进行repeat_interleave，然后以其为参数对rgbs进行torch.bmm操作
             exposure = exposure.repeat_interleave(ray_ids.shape[0] // view_ids.shape[0], dim=0)
+            # torch.bmm 批矩阵乘法，然后进行截取
             rgbs = torch.bmm(exposure, rgbs[..., None])[..., 0]
+        
+        # 最后clamp一下
+        # clamp是将对应tensor的值“夹”在给定的范围之间，若大于则直接取范围上的最大值，小于则直接取范围上的最小值
         rgbs = rgbs.clamp(0, 1)
 
         return rgbs, depth_maps, directions, ij
