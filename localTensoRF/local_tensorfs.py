@@ -6,6 +6,7 @@ import torch
 from models.tensorBase import AlphaGridMask
 
 from models.tensoRF import TensorVMSplit
+from hexplane.model import HexPlane_Slim
 
 from utils.utils import mtx_to_sixD, sixD_to_mtx
 from utils.ray_utils import get_ray_directions_lean, get_rays_lean, get_ray_directions_360
@@ -135,6 +136,7 @@ class LocalTensorfs(torch.nn.Module):
         else:
             world2rf = torch.zeros(3, device=self.device)
 
+        # 此处添加了新的TensoRF
         self.tensorfs.append(TensorVMSplit(device=self.device, **self.tensorf_args))
 
         self.world2rf.append(world2rf.clone().detach())

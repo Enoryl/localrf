@@ -17,7 +17,7 @@ class SimpleSampler:
     A sampler that samples a batch of ids randomly.
     """
 
-    def __init__(self, total, batch):
+    def __init__(self, total, batch): # 传入一个dataset和batch size
         self.total = total
         self.batch = batch
         self.curr = total
@@ -109,14 +109,18 @@ class Trainer:
                 )
             ).long()
         ).tolist()[1:]
+
+        # 最终需要得到N_voxel_list和Time_grid_list
         self.N_voxel_list = N_voxel_list
         self.Time_grid_list = Time_grid_list
 
+    # 每次迭代训练中用于获取数据的函数
     def sample_data(self, train_dataset, iteration):
         """
         Sample a batch of data from the dataset.
         """
         train_depth = None
+        # 这里的datasampler_type默认为rays
         # sample rays: shuffle all the rays of training dataset and sampled a batch of rays from them.
         if self.cfg.data.datasampler_type == "rays":
             ray_idx = self.sampler.nextids()
@@ -224,19 +228,21 @@ class Trainer:
                 rays_train = rays_train[select_inds]
                 rgb_train = rgb_train[select_inds]
                 frame_time = torch.ones_like(rays_train[:, 0:1]) * frame_time
+        # 获取rays_train、rgb_train、frame_time、train_depth
         return rays_train, rgb_train, frame_time, train_depth
 
     def init_sampler(self, train_dataset):
         """
         Initialize the sampler for the training dataset.
         """
-        if self.cfg.data.datasampler_type == "rays":
+        if self.cfg.data.datasampler_type == "rays": # datasampler_type 默认为rays
             self.sampler = SimpleSampler(len(train_dataset), self.cfg.optim.batch_size)
         elif self.cfg.data.datasampler_type == "images":
             self.sampler = SimpleSampler(len(train_dataset), 1)
         elif self.cfg.data.datasampler_type == "hierach":
             self.global_mean = train_dataset.global_mean_rgb.to(self.device)
 
+    # 主要是调用了这里的train函数
     def train(self):
         torch.cuda.empty_cache()
 
@@ -278,6 +284,7 @@ class Trainer:
             train_dataset.all_depths = alldepths
 
         # initialize the data sampler
+        # 使用sampler获取数据
         self.init_sampler(train_dataset)
         # precompute the voxel upsample list
         self.get_voxel_upsample_list()
@@ -288,6 +295,7 @@ class Trainer:
             1.0, self.cfg.model.TV_t_s_ratio
         )  # TV loss on the spatial-temporal planes
 
+        # tqdm是一个快速、可拓展的Python进度条
         pbar = tqdm(
             range(self.cfg.optim.n_iters),
             miniters=self.cfg.systems.progress_refresh_rate,
@@ -303,12 +311,18 @@ class Trainer:
             grad_vars, betas=(self.cfg.optim.beta1, self.cfg.optim.beta2)
         )
 
+        # 开始迭代训练
         for iteration in pbar:
-            # Sample dat
+            # Sample data
+            # 用sample_data获取数据
+            # 返回的数据为rays_train、rgb_train、frame_time和depth
             rays_train, rgb_train, frame_time, depth = self.sample_data(
                 train_dataset, iteration
             )
             # Render the rgb values of rays
+            # 输入模型获得结果
+            # 渲染需要的数据为rays_train和frame_time
+            # 返回的uncertainty没有使用
             rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(
                 rays_train,
                 frame_time,
@@ -322,6 +336,7 @@ class Trainer:
             )
 
             # Calculate the loss
+            # 计算损失
             loss = torch.mean((rgb_map - rgb_train) ** 2)
             total_loss = loss
 
@@ -329,6 +344,7 @@ class Trainer:
             lr_factor = self.get_lr_decay_factor(iteration)
 
             # regularization
+            # 一些其他的loss
             # TV loss on the density planes
             if self.cfg.model.TV_weight_density > 0:
                 TV_weight_density = lr_factor * self.cfg.model.TV_weight_density
@@ -407,6 +423,7 @@ class Trainer:
             summary_writer.add_scalar("train/mse", loss, global_step=iteration)
 
             # Print the current values of the losses.
+            # 如果到达了设定的输出迭代次数则进行输出
             if iteration % self.cfg.systems.progress_refresh_rate == 0:
                 pbar.set_description(
                     f"Iteration {iteration:05d}:"

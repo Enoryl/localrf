@@ -103,60 +103,62 @@ class HexPlane_Base(torch.nn.Module):
         init_shift: float = 0.0,
         normalize_type: str = "normal",
         **kwargs,
-    ):
+    ): # 这里我觉得可以着重看下面使用到的参数
         super().__init__()
 
-        self.aabb = aabb
-        self.device = device
-        self.time_grid = time_grid
-        self.near_far = near_far
-        self.near_far_org = near_far
-        self.step_ratio = kwargs.get("step_ratio", 2.0)
-        self.update_stepSize(gridSize)
+        self.aabb = aabb # 同localrf
+        self.device = device # localrf中有，但不会在创建TensoRFVMSplit时使用
+        self.time_grid = time_grid # 额外参数
+        self.near_far = near_far # 同localrf（值似乎不同）
+        self.near_far_org = near_far # 额外参数，但根据已有的参数得出
+        self.step_ratio = kwargs.get("step_ratio", 2.0) # 同localrf
+        self.update_stepSize(gridSize) # 同localrf
+        #---------------------------------------------------调用函数update_stepSize
 
         # Density and Appearance HexPlane components numbers and value regression mode.
-        self.density_n_comp = density_n_comp
-        self.app_n_comp = app_n_comp
-        self.density_dim = density_dim
-        self.app_dim = app_dim
-        self.align_corners = kwargs.get(
+        self.density_n_comp = density_n_comp # 同localrf
+        self.app_n_comp = app_n_comp # 同localrf，但名为appearance_n_comp
+        self.density_dim = density_dim # 额外的参数，localrf中只有app_dim
+        self.app_dim = app_dim # 同localrf
+        self.align_corners = kwargs.get( # 额外的参数
             "align_corners", True
         )  # align_corners for grid_sample
 
         # HexPlane weights initialization: scale and shift for uniform distribution.
-        self.init_scale = init_scale
-        self.init_shift = init_shift
+        self.init_scale = init_scale # 额外的参数
+        self.init_shift = init_shift # 额外的参数
 
         # HexPlane fusion mode.
-        self.fusion_one = fusion_one
-        self.fusion_two = fusion_two
+        self.fusion_one = fusion_one # 额外的参数
+        self.fusion_two = fusion_two # 额外的参数
 
         # Plane Index
-        self.matMode = [[0, 1], [0, 2], [1, 2]]
-        self.vecMode = [2, 1, 0]
+        self.matMode = [[0, 1], [0, 2], [1, 2]] # 额外的参数
+        self.vecMode = [2, 1, 0] # 额外的参数
 
         # Coordinate normalization type.
-        self.normalize_type = normalize_type
+        self.normalize_type = normalize_type # 额外的参数
 
         # Plane initialization.
-        self.init_planes(gridSize[0], device)
+        self.init_planes(gridSize[0], device) # 这里要用到前面传入的device
+        #---------------------------------------------------调用函数init_planes
 
         # Density calculation settings.
-        self.fea2denseAct = fea2denseAct  # feature to density activation function
-        self.density_shift = kwargs.get(
+        self.fea2denseAct = fea2denseAct  # feature to density activation function 同localrf
+        self.density_shift = kwargs.get( # 同localrf
             "density_shift", -10.0
         )  # density shift for density activation function.
-        self.distance_scale = kwargs.get(
+        self.distance_scale = kwargs.get( # 同localrf
             "distance_scale", 25.0
         )  # distance scale for density activation function.
-        self.DensityMode = DensityMode
-        self.density_t_pe = kwargs.get("density_t_pe", -1)
-        self.density_pos_pe = kwargs.get("density_pos_pe", -1)
-        self.density_view_pe = kwargs.get("density_view_pe", -1)
-        self.density_fea_pe = kwargs.get("density_fea_pe", 6)
-        self.density_featureC = kwargs.get("density_featureC", 128)
-        self.density_n_layers = kwargs.get("density_n_layers", 3)
-        self.init_density_func(
+        self.DensityMode = DensityMode # 额外的参数
+        self.density_t_pe = kwargs.get("density_t_pe", -1) # 额外的参数，和下列参数类似，localrf中只有pos_pe、view_pe等
+        self.density_pos_pe = kwargs.get("density_pos_pe", -1) # 额外的参数
+        self.density_view_pe = kwargs.get("density_view_pe", -1) # 额外的参数
+        self.density_fea_pe = kwargs.get("density_fea_pe", 6) # 额外的参数
+        self.density_featureC = kwargs.get("density_featureC", 128) # 额外的参数
+        self.density_n_layers = kwargs.get("density_n_layers", 3) # 额外的参数
+        self.init_density_func( # 这里是利用上面得到的参数进行操作
             self.DensityMode,
             self.density_t_pe,
             self.density_pos_pe,
@@ -166,15 +168,16 @@ class HexPlane_Base(torch.nn.Module):
             self.density_n_layers,
             self.device,
         )
+        #---------------------------------------------------调用函数init_density_func
 
         # Appearance calculation settings.
-        self.AppMode = AppMode
-        self.app_t_pe = kwargs.get("app_t_pe", -1)
-        self.app_pos_pe = kwargs.get("app_pos_pe", -1)
-        self.app_view_pe = kwargs.get("app_view_pe", 6)
-        self.app_fea_pe = kwargs.get("app_fea_pe", 6)
-        self.app_featureC = kwargs.get("app_featureC", 128)
-        self.app_n_layers = kwargs.get("app_n_layers", 3)
+        self.AppMode = AppMode # 额外的参数
+        self.app_t_pe = kwargs.get("app_t_pe", -1) # 额外的参数
+        self.app_pos_pe = kwargs.get("app_pos_pe", -1) # 额外的参数
+        self.app_view_pe = kwargs.get("app_view_pe", 6) # 额外的参数
+        self.app_fea_pe = kwargs.get("app_fea_pe", 6) # 额外的参数
+        self.app_featureC = kwargs.get("app_featureC", 128) # 额外的参数
+        self.app_n_layers = kwargs.get("app_n_layers", 3) # 额外的参数
         self.init_app_func(
             AppMode,
             self.app_t_pe,
@@ -185,20 +188,22 @@ class HexPlane_Base(torch.nn.Module):
             self.app_n_layers,
             device,
         )
+        #---------------------------------------------------调用函数init_app_func
 
         # Density HexPlane mask and other acceleration tricks.
-        self.emptyMask = emptyMask
-        self.emptyMask_thres = kwargs.get(
+        self.emptyMask = emptyMask # 额外的参数
+        self.emptyMask_thres = kwargs.get( # 额外的参数，localrf的alphaMask_thres也许和这个相似？
             "emptyMask_thres", 0.001
         )  # density threshold for emptiness mask
-        self.rayMarch_weight_thres = kwargs.get(
+        self.rayMarch_weight_thres = kwargs.get( # 额外的参数
             "rayMarch_weight_thres", 0.0001
         )  # density threshold for rendering colors.
 
         # Regulartization settings.
-        self.random_background = kwargs.get("random_background", False)
-        self.depth_loss = kwargs.get("depth_loss", False)
+        self.random_background = kwargs.get("random_background", False) # 额外的参数
+        self.depth_loss = kwargs.get("depth_loss", False) # 额外的参数
 
+    # TensoRF有同名函数，可能做了一些修改
     def init_density_func(
         self, DensityMode, t_pe, pos_pe, view_pe, fea_pe, featureC, n_layers, device
     ):
@@ -261,6 +266,7 @@ class HexPlane_Base(torch.nn.Module):
         print(self.app_regressor)
         print("pos_pe", pos_pe, "view_pe", view_pe, "fea_pe", fea_pe)
 
+    # TensoRF有同名函数，可能做了一些修改
     def update_stepSize(self, gridSize):
         print("aabb", self.aabb.view(-1))
         print("grid size", gridSize)
@@ -274,6 +280,7 @@ class HexPlane_Base(torch.nn.Module):
         print("sampling step size: ", self.stepSize)
         print("sampling number: ", self.nSamples)
 
+    # 下面是4个和TensoRF中相同的、没有实现的函数
     def init_planes(self, res, device):
         pass
 
@@ -286,6 +293,7 @@ class HexPlane_Base(torch.nn.Module):
     def compute_appfeature(self, xyz_sampled, frame_time):
         pass
 
+    # TensoRF有同名函数，可能做了一些修改
     def normalize_coord(self, xyz_sampled):
         """
         Normalize the sampled coordinates to [-1, 1] range.
@@ -293,6 +301,7 @@ class HexPlane_Base(torch.nn.Module):
         if self.normalize_type == "normal":
             return (xyz_sampled - self.aabb[0]) * self.invaabbSize - 1
 
+    # TensoRF有同名函数，可能做了一些修改
     def feature2density(self, density_features: torch.Tensor) -> torch.Tensor:
         if self.fea2denseAct == "softplus":
             return F.softplus(density_features + self.density_shift)
@@ -301,6 +310,7 @@ class HexPlane_Base(torch.nn.Module):
         else:
             raise NotImplementedError("No such activation function for density feature")
 
+    # TensoRF有sample_ray
     def sample_rays(
         self,
         rays_o: torch.Tensor,
@@ -334,6 +344,7 @@ class HexPlane_Base(torch.nn.Module):
         )
         return rays_pts, interpx, ~mask_outbbox
 
+    # TensoRF有同名函数，可能做了一些修改
     @torch.no_grad()
     def filtering_rays(
         self,
@@ -416,6 +427,7 @@ class HexPlane_Base(torch.nn.Module):
                 None,
             )
 
+    # TensoRF有同名函数，可能做了一些修改
     def forward(
         self,
         rays_chunk: torch.Tensor,
@@ -527,6 +539,7 @@ class HexPlane_Base(torch.nn.Module):
                 depth_map = depth_map + (1.0 - acc_map) * rays_chunk[..., -1]
         return rgb_map, depth_map, alpha, z_vals
 
+    # TensoRF有updateAlphaMask
     @torch.no_grad()
     def updateEmptyMask(self, gridSize=(200, 200, 200), time_grid=64):
         """
@@ -553,6 +566,7 @@ class HexPlane_Base(torch.nn.Module):
 
         return None
 
+    # TensoRF有getDenseAlpha
     @torch.no_grad()
     def getDenseEmpty(self, gridSize=None, time_grid=None):
         """

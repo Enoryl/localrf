@@ -66,6 +66,7 @@ class HexPlane_Slim(HexPlane_Base):
             line_time_coef
         ).to(device)
 
+    # 同TensoRF
     def get_optparam_groups(self, cfg, lr_scale=1.0):
         grad_vars = [
             {
@@ -120,6 +121,7 @@ class HexPlane_Slim(HexPlane_Base):
 
         return grad_vars
 
+    # TensoRF中有同名函数，不过这里可能做了一些修改
     def compute_densityfeature(
         self, xyz_sampled: torch.Tensor, frame_time: torch.Tensor
     ) -> torch.Tensor:
@@ -184,6 +186,7 @@ class HexPlane_Slim(HexPlane_Base):
             )
         return density_feature
 
+    # TensoRF中有同名函数，不过这里可能做了一些修改
     def compute_appfeature(
         self, xyz_sampled: torch.Tensor, frame_time: torch.Tensor
     ) -> torch.Tensor:
@@ -249,6 +252,7 @@ class HexPlane_Slim(HexPlane_Base):
 
         return self.app_basis_mat((plane_feat * line_time_feat).T)
 
+    # 同TensoRF
     def TV_loss_density(self, reg, reg2=None):
         total = 0
         if reg2 is None:
@@ -259,6 +263,7 @@ class HexPlane_Slim(HexPlane_Base):
             )
         return total
 
+    # 同TensoRF
     def TV_loss_app(self, reg, reg2=None):
         total = 0
         if reg2 is None:
@@ -267,6 +272,7 @@ class HexPlane_Slim(HexPlane_Base):
             total = total + reg(self.app_plane[idx]) + reg2(self.app_line_time[idx])
         return total
 
+    # 下面的两个L1 Loss是新增的
     def L1_loss_density(self):
         total = 0
         for idx in range(len(self.density_plane)):
@@ -287,6 +293,7 @@ class HexPlane_Slim(HexPlane_Base):
             )
         return total
 
+    # 此处应该是对up_sampling_VM的修改版本
     @torch.no_grad()
     def up_sampling_planes(self, plane_coef, line_time_coef, res_target, time_grid):
         for i in range(len(self.vecMode)):
@@ -311,6 +318,7 @@ class HexPlane_Slim(HexPlane_Base):
 
         return plane_coef, line_time_coef
 
+    # 同TensoRF
     @torch.no_grad()
     def upsample_volume_grid(self, res_target, time_grid):
         self.app_plane, self.app_line_time = self.up_sampling_planes(
@@ -322,3 +330,5 @@ class HexPlane_Slim(HexPlane_Base):
 
         self.update_stepSize(res_target)
         print(f"upsamping to {res_target}")
+    
+    # 没有重新实现的shrink函数

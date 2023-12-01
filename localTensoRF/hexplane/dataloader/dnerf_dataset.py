@@ -85,6 +85,7 @@ class DNerfDataset(Dataset):
 
         self.define_transforms()  # transform to torch.Tensor
 
+        # 合着你就把这俩tensor合并了一下，那你为啥要分开传呢
         self.scene_bbox = torch.tensor([scene_bbox_min, scene_bbox_max])
         self.blender2opencv = np.array(
             [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
