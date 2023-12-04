@@ -10,8 +10,6 @@ class HexPlane_Slim(HexPlane_Base):
     1. Fusion-One is "Multiply" and Fusion-Two is "Concat".
     2. We directly calculate densities from HexPlane without MLPs, which means  DensityMode is "plain" and density_dim = 1.
     """
-
-    # old
     def __init__(self, aabb, gridSize, device, time_grid, near_far, **kargs):
         super().__init__(aabb, gridSize, device, time_grid, near_far, **kargs)
         assert (

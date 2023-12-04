@@ -586,7 +586,6 @@ class LocalTensorfs(torch.nn.Module):
                     refine=self.is_refining,
                     floater_thresh=floater_thresh,
                 )
-                # 模型得到rgb_map_t、depth_map_t
 
                 # 一些后续操作，应该是将得到的数据保存到容器中
                 rgbs[chunk_idx * chunk : (chunk_idx + 1) * chunk] = (
