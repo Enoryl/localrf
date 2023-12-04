@@ -322,7 +322,7 @@ def reconstruction(args):
         alphaMask_thres=args.alpha_mask_thre, # 原版含有此参数（创建TensoRFVMSplit所用参数）
         shadingMode=args.shadingMode, # 原版含有此参数（创建TensoRFVMSplit所用参数）
         aabb=aabb, # 原版含有此参数（创建TensoRFVMSplit所用参数）
-        gridSize=reso_cur,# （创建TensoRFVMSplit所用参数）
+        gridSize=reso_cur,# （创建TensoRFVMSplit所用参数）----------------------------gridSize就是reso_cur！
         density_n_comp=n_lamb_sigma, # 原版含有此参数（创建TensoRFVMSplit所用参数）
         appearance_n_comp=n_lamb_sh, # 原版含有此参数（创建TensoRFVMSplit所用参数）
         app_dim=args.data_dim_color, # 原版含有此参数（创建TensoRFVMSplit所用参数）
@@ -363,12 +363,27 @@ def reconstruction(args):
         loss_weights = torch.from_numpy(data_blob["loss_weights"]).to(args.device)
         train_test_poses = data_blob["train_test_poses"] # 用于local_tensorfs的输入
         ray_idx = torch.from_numpy(data_blob["idx"]).to(args.device) # 用于local_tensorfs的输入
+        # new
+        # 传出的时间序列速出
+        time_record = torch.from_numpy(data_blob["time"])
 
         # lr_factor=1，每次以rf_iter的最后一个元素为指数进行运算
         reg_loss_weight = local_tensorfs.lr_factor ** (local_tensorfs.rf_iter[-1])
 
+        # 这里也要修改，添加新的时间输入
+        # old
+        # rgb_map, depth_map, directions, ij = local_tensorfs(
+        #     ray_idx,
+        #     view_ids,
+        #     W,
+        #     H,
+        #     is_train=True,
+        #     test_id=train_test_poses,
+        # )
+        # new
         rgb_map, depth_map, directions, ij = local_tensorfs(
             ray_idx,
+            time_record,
             view_ids,
             W,
             H,
@@ -435,6 +450,8 @@ def reconstruction(args):
             writer.add_scalar("train/depth_loss", depth_loss, global_step=iteration)
 
         # 这里regularize默认为True，也是损失计算相关的内容
+        # ！！！此处hexplane缺少组件，损失计算会失败
+        # ====应当采用hexplane中的损失计算方法？
         if  local_tensorfs.regularize:
             loss_tv, l1_loss = local_tensorfs.get_reg_loss(tvreg, args.TV_weight_density, args.TV_weight_app, args.L1_weight)
             total_loss = total_loss + loss_tv + l1_loss
@@ -443,6 +460,8 @@ def reconstruction(args):
 
         # Optimizes 优化
         # train_test_poses为True的概率与test在数据集中所占的比例相同
+        # ！！！：这里应当是去修改local_tensorfs中的optimizer_step_poses_only和optimizer_step的逻辑
+        # 也或许不用改？这两个函数中使用的optimizer都是容器
         if train_test_poses: # 可以理解为如果为test
             can_add_rf = False # 那么这次不能添加rf网络
             if optimize_poses:

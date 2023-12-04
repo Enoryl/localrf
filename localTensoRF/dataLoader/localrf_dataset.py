@@ -72,6 +72,9 @@ class LocalRFDataset(Dataset):
         else:
             # 如果没有with_processed_poses，则总会进入这里
             self.image_paths = sorted(os.listdir(os.path.join(self.root_dir, "images")))
+            # new：用于后续时间统计的变量
+            self.image_num = len(self.image_paths)
+        
         if subsequence != [0, -1]: # 这个应该总是满足相等，因此不会进入这里
             self.image_paths = self.image_paths[subsequence[0]:subsequence[1]]
 
@@ -121,6 +124,9 @@ class LocalRFDataset(Dataset):
         self.all_invdepths = None
         self.all_fwd_flow, self.all_fwd_mask, self.all_bwd_flow, self.all_bwd_mask = None, None, None, None
         self.all_loss_weights = None
+        # new：
+        # 时间，起始帧时间为0.0，末尾帧时间为1.0
+        self.all_times = torch.linspace(0.0, 1.0, self.image_num).numpy()
 
         self.active_frames_bounds = [0, 0]
         self.loaded_frames = 0
@@ -394,6 +400,10 @@ class LocalRFDataset(Dataset):
         # idx的每个元素减去active_frames_bounds[0] * self.n_px_per_frame的值
         idx_sample = idx - self.active_frames_bounds[0] * self.n_px_per_frame
 
+        # new
+        # 这样计算正确吗？
+        time_idx = idx_sample // self.n_px_per_frame # (1408 * 376)
+
         # 返回
         return {
             "rgbs": self.all_rgbs[idx_sample], 
@@ -406,4 +416,7 @@ class LocalRFDataset(Dataset):
             "idx": idx,
             "view_ids": view_ids,
             "train_test_poses": train_test_poses,
+            # new：添加时间
+            # 注意：time需要根据数据的总数来确定，最开始的帧time值为0.0，而最后的帧time为1.0
+            "time": self.all_times[time_idx]
         }

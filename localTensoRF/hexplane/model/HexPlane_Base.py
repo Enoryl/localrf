@@ -106,6 +106,12 @@ class HexPlane_Base(torch.nn.Module):
     ): # 这里我觉得可以着重看下面使用到的参数
         super().__init__()
 
+        # new：添加一些变量用于后面的操作
+        self.lr_density_grid=0.02
+        self.lr_app_grid=0.02
+        self.lr_density_nn=0.001
+        self.lr_app_nn=0.001
+
         self.aabb = aabb # 同localrf
         self.device = device # localrf中有，但不会在创建TensoRFVMSplit时使用
         self.time_grid = time_grid # 额外参数

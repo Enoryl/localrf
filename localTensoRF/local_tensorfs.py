@@ -214,14 +214,24 @@ class LocalTensorfs(torch.nn.Module):
             self.tensorf_args["near_far"], 
             self.device
         )
+        self.tensorfs.append(model)
 
         self.world2rf.append(world2rf.clone().detach())
         
         self.rf_iter.append(0)
 
+        # old
+        # grad_vars = self.tensorfs[-1].get_optparam_groups(
+        #     self.rf_lr_init, self.rf_lr_basis
+        # )
+        # new
         grad_vars = self.tensorfs[-1].get_optparam_groups(
-            self.rf_lr_init, self.rf_lr_basis
+            self.tensorfs[-1].lr_density_grid,
+            self.tensorfs[-1].lr_app_grid,
+            self.tensorfs[-1].lr_density_nn,
+            self.tensorfs[-1].lr_app_nn
         )
+
         self.rf_optimizer = (torch.optim.Adam(grad_vars, betas=(0.9, 0.99)))
    
     def append_frame(self):
@@ -257,6 +267,16 @@ class LocalTensorfs(torch.nn.Module):
         self.t_optimizers.append(torch.optim.Adam([self.t_c2w[-1]], betas=(0.9, 0.99), lr=self.lr_t_init)) 
         self.exp_optimizers.append(torch.optim.Adam([self.exposure[-1]], betas=(0.9, 0.99), lr=self.lr_exposure_init)) 
 
+
+    # r_optimizers和t_optimizers都是由上面的append_frame函数添加的优化器，
+    # 这里提供一下hexplane的优化器参数
+    # optimizer = torch.optim.Adam(
+    #     grad_vars, betas=(self.cfg.optim.beta1, self.cfg.optim.beta2)
+    # )
+    # cfg.optim.beta1 = 0.9
+    # cfg.optim.beta2 = 0.99
+    # 其实这个对应的已经存在了，名为rf_optimizer
+    # 所以上面的应该不用改
     def optimizer_step_poses_only(self, loss):
         for idx in range(len(self.r_optimizers)):
             if self.pose_linked_rf[idx] == len(self.rf_iter) - 1 and self.rf_iter[-1] < self.n_iters:
@@ -336,8 +356,16 @@ class LocalTensorfs(torch.nn.Module):
 
             if self.lr_upsample_reset:
                 print("reset lr to initial")
+                # old
+                # grad_vars = self.tensorfs[-1].get_optparam_groups( # TODO: 这里应付当也要修改
+                #     self.rf_lr_init, self.rf_lr_basis
+                # )
+                # new
                 grad_vars = self.tensorfs[-1].get_optparam_groups(
-                    self.rf_lr_init, self.rf_lr_basis
+                        self.tensorfs[-1].lr_density_grid,
+                        self.tensorfs[-1].lr_app_grid,
+                        self.tensorfs[-1].lr_density_nn,
+                        self.tensorfs[-1].lr_app_nn
                 )
                 self.rf_optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
 
@@ -452,7 +480,7 @@ class LocalTensorfs(torch.nn.Module):
                 tv_loss += self.tensorfs[-1].TV_loss_app(tvreg).mean() * tv_weight
     
             if L1_weight_inital > 0:
-                l1_loss += self.tensorfs[-1].density_L1() * L1_weight_inital
+                l1_loss += self.tensorfs[-1].density_L1() * L1_weight_inital # 此处，hexplane没有名为density_L1的方法
         return tv_loss, l1_loss
 
     def focal(self, W):
@@ -464,9 +492,28 @@ class LocalTensorfs(torch.nn.Module):
     # 在train中接收到ray_ids、view_ids、W、H、is_train=True和test_id之后
     # 是如何运算出rgb_map、depth_map、directions、ij的？
     # 可以继续向前查看此类的__init__函数
+    # 需要添加时间的输入
+    # old
+    # def forward(
+    #     self,
+    #     ray_ids,
+    #     view_ids,
+    #     W,
+    #     H,
+    #     white_bg=True,
+    #     is_train=True,
+    #     cam2world=None,
+    #     world2rf=None,
+    #     blending_weights=None,
+    #     chunk=16384,
+    #     test_id=False,
+    #     floater_thresh=0,
+    # ):
+    # new
     def forward(
         self,
         ray_ids,
+        time_record,
         view_ids,
         W,
         H,
@@ -575,16 +622,42 @@ class LocalTensorfs(torch.nn.Module):
                 cam2rf = cam2rfs[rf_id][chunk_idx * chunk : (chunk_idx + 1) * chunk]
 
                 rays_o, rays_d = get_rays_lean(directions_chunk, cam2rf)
+
+                # 下面三者似乎运算结果是相同的，由此可以大致推断localrf和hexplane的数据组织方式相似
+                # rays1 = torch.cat([rays_o, rays_d], -1)
+                # rays2 = torch.cat([rays_o, rays_d], 1)
+                # rays3 = torch.cat([rays_o, rays_d], -1).view(-1, 6)
+
                 rays = torch.cat([rays_o, rays_d], -1).view(-1, 6)
 
                 # 需要传入的数据项只有ray，其他的均为参数
-                rgb_map_t, depth_map_t = self.tensorfs[rf_id](
+                # 模型替换为了HexPlane，因此这里也要做出修改
+                # -----------------------------------------训练--------------------------------------------
+
+                # old
+                # rgb_map_t, depth_map_t = self.tensorfs[rf_id](
+                #     rays,
+                #     is_train=is_train,
+                #     white_bg=white_bg,
+                #     N_samples=-1,
+                #     refine=self.is_refining,
+                #     floater_thresh=floater_thresh,
+                # )
+                # 模型得到rgb_map_t、depth_map_t
+
+
+                # new  
+                # 用不用renderer.py里面的OctreeRender？
+                # 想一下这里的时间输入对不对
+                rgb_map_t, depth_map_t, alpha_map, z_val_map = self.tensorfs[rf_id](
                     rays,
+                    time_record,
                     is_train=is_train,
                     white_bg=white_bg,
                     N_samples=-1,
-                    refine=self.is_refining,
-                    floater_thresh=floater_thresh,
+                    # 去掉一些不需要的输入参数
+                    # refine=self.is_refining,
+                    # floater_thresh=floater_thresh,
                 )
 
                 # 一些后续操作，应该是将得到的数据保存到容器中

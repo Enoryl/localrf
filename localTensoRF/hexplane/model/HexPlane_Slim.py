@@ -66,37 +66,64 @@ class HexPlane_Slim(HexPlane_Base):
         ).to(device)
 
     # 同TensoRF
-    def get_optparam_groups(self, cfg, lr_scale=1.0):
+    # old
+    # def get_optparam_groups(self, cfg, lr_scale=1.0):
+    # new
+    def get_optparam_groups(self, lr_density_grid, lr_app_grid, lr_density_nn, lr_app_nn, lr_scale=1.0):
         grad_vars = [
             {
                 "params": self.density_line_time,
-                "lr": lr_scale * cfg.lr_density_grid,
-                "lr_org": cfg.lr_density_grid,
+                # old
+                # "lr": lr_scale * cfg.lr_density_grid,
+                # "lr_org": cfg.lr_density_grid,
+                # new
+                "lr": lr_scale * lr_density_grid,
+                "lr_org": lr_density_grid,
             },
             {
                 "params": self.density_plane,
-                "lr": lr_scale * cfg.lr_density_grid,
-                "lr_org": cfg.lr_density_grid,
+                # old
+                # "lr": lr_scale * cfg.lr_density_grid,
+                # "lr_org": cfg.lr_density_grid,
+                # new
+                "lr": lr_scale * lr_density_grid,
+                "lr_org": lr_density_grid,
             },
             {
                 "params": self.app_line_time,
-                "lr": lr_scale * cfg.lr_app_grid,
-                "lr_org": cfg.lr_app_grid,
+                # old
+                # "lr": lr_scale * cfg.lr_app_grid,
+                # "lr_org": cfg.lr_app_grid,
+                # new
+                "lr": lr_scale * lr_app_grid,
+                "lr_org": lr_app_grid,
             },
             {
                 "params": self.app_plane,
-                "lr": lr_scale * cfg.lr_app_grid,
-                "lr_org": cfg.lr_app_grid,
+                # old
+                # "lr": lr_scale * cfg.lr_app_grid,
+                # "lr_org": cfg.lr_app_grid,
+                # new
+                "lr": lr_scale * lr_app_grid,
+                "lr_org": lr_app_grid,
             },
             {
                 "params": self.density_basis_mat.parameters(),
-                "lr": lr_scale * cfg.lr_density_nn,
-                "lr_org": lr_scale * cfg.lr_density_nn,
+                # old
+                # "lr": lr_scale * cfg.lr_density_nn,
+                # "lr_org": lr_scale * cfg.lr_density_nn,
+                # new
+                "lr": lr_scale * lr_density_nn,
+                "lr_org": lr_scale * lr_density_nn,
             },
             {
                 "params": self.app_basis_mat.parameters(),
-                "lr": lr_scale * cfg.lr_app_nn,
-                "lr_org": cfg.lr_app_nn,
+                # old
+                # "lr": lr_scale * cfg.lr_app_nn,
+                # "lr_org": cfg.lr_app_nn,
+                # new
+                "lr": lr_scale * lr_app_nn,
+                "lr_org": lr_app_nn,
             },
         ]
 
@@ -104,8 +131,12 @@ class HexPlane_Slim(HexPlane_Base):
             grad_vars += [
                 {
                     "params": self.app_regressor.parameters(),
-                    "lr": lr_scale * cfg.lr_app_nn,
-                    "lr_org": cfg.lr_app_nn,
+                    # old
+                    # "lr": lr_scale * cfg.lr_app_nn,
+                    # "lr_org": cfg.lr_app_nn,
+                    # new
+                    "lr": lr_scale * lr_app_nn,
+                    "lr_org": lr_app_nn,
                 }
             ]
 
@@ -113,8 +144,12 @@ class HexPlane_Slim(HexPlane_Base):
             grad_vars += [
                 {
                     "params": self.density_regressor.parameters(),
-                    "lr": lr_scale * cfg.lr_density_nn,
-                    "lr_org": cfg.lr_density_nn,
+                    # old
+                    # "lr": lr_scale * cfg.lr_density_nn,
+                    # "lr_org": cfg.lr_density_nn,
+                    # new
+                    "lr": lr_scale * lr_density_nn,
+                    "lr_org": lr_density_nn,
                 }
             ]
 
