@@ -336,6 +336,7 @@ def reconstruction(args):
         featureC=args.featureC, # 原版含有此参数（创建TensoRFVMSplit所用参数）
         step_ratio=args.step_ratio, # 原版含有此参数（创建TensoRFVMSplit所用参数）
         fea2denseAct=args.fea2denseAct, # 原版含有此参数（创建TensoRFVMSplit所用参数）
+        reso_cur=reso_cur, # new：仅用于创建时的reso_cur值绑定
     )
     local_tensorfs = local_tensorfs.to(args.device)
 

@@ -6,7 +6,7 @@ import torch
 from models.tensorBase import AlphaGridMask
 
 from models.tensoRF import TensorVMSplit
-from hexplane.model import HexPlane_Slim
+from hexplane.model import init_model
 
 from utils.utils import mtx_to_sixD, sixD_to_mtx
 from utils.ray_utils import get_ray_directions_lean, get_rays_lean, get_ray_directions_360
@@ -113,7 +113,75 @@ class LocalTensorfs(torch.nn.Module):
         self.tensorfs = torch.nn.ParameterList()
         self.rf_iter = []
         self.world2rf = torch.nn.ParameterList()
+
+        # new:
+        # 初始化hexplane所需的参数
+        self.hexplane_cfg = {
+            "model_name": "HexPlane_Slim",
+            "N_voxel_init": 64*64*64,
+            # localrf使用的值为 640 ** 3
+            # hexplane为200 ** 3
+            "N_voxel_final": 200*200*200,
+            "step_ratio": 0.5,
+            "nonsquare_voxel": True,
+            "time_grid_init": 16,
+            "time_grid_final": 128,
+            "nonsquare_type": "normal",
+            # localrf中有upsamp_list，值为[100, 150, 200, 250, 300]
+            # hexplane中的upsample_list为[3000， 6000， 9000]
+            "upsample_list": [3000, 6000, 9000],
+            "update_emptymask_list": [4000, 8000, 10000],
+            # localrf中名为n_lamb_sigma，值为[8, 8, 8]
+            # hexplane为[24, 24, 24]
+            "density_n_comp": [24, 24, 24], 
+            # localrf中名为n_lamb_sh，值为[24, 24, 24]
+            # hexplane为[48, 48, 48]
+            "app_n_comp": [48, 48, 48], 
+            "density_dim": 1,
+            "app_dim": 27,
+            "DensityMod": "plain",
+            "AppMode": "general_MLP",
+            "init_scale": 1.0,
+            "init_shift": 0.0,
+            "fusion_one": "multiply",
+            "fusion_two": "concat",
+            "fea2denseAct": "softplus",
+            "density_shift": -10.0,
+            "distance_scale": 25.0,
+            "density_t_pe": -1,
+            "density_pos_pe": -1,
+            "density_view_pe": -1,
+            "density_fea_pe": 2,
+            "density_featureC": 128,
+            "density_n_layers": 3,
+            "app_t_pe": -1,
+            "app_pos_pe": -1,
+            "app_view_pe": 1,
+            "app_fea_pe": 2,
+            "app_featureC": 128,
+            "app_n_layers": 3,
+            "emptyMask_thes": 0.001,
+            "rayMarch_weight_thres": 0.0001,
+            "random_back_ground": False,
+            "depth_loss": False,
+            "depth_loss_weight": 1.0,
+            "dist_loss": False,
+            "dist_loss_weight": 0.01,
+            "TV_t_s_ratio": 2.0,
+            "TV_weight_density": 0.0001,
+            "TV_weight_app": 0.0001,
+            "L1_weight_density": 0.0,
+            "L1_weight_app": 0.0,
+            "align_corners": True,
+            # 此处默认为aligned，但会修改reso_cur，因此此处取unaligned
+            "upsampling_type": "unaligned",
+            "nSamples": 1000000,
+            "ckpt": None,
+            "reso_cur": self.tensorf_args["reso_cur"]
+        }
+
         self.append_rf()
+
 
     def append_rf(self, n_added_frames=1):
         self.is_refining = False
@@ -137,7 +205,15 @@ class LocalTensorfs(torch.nn.Module):
             world2rf = torch.zeros(3, device=self.device)
 
         # 此处添加了新的TensoRF
-        self.tensorfs.append(TensorVMSplit(device=self.device, **self.tensorf_args))
+        # old version:
+        # self.tensorfs.append(TensorVMSplit(device=self.device, **self.tensorf_args))
+        # new version:
+        model, reso_cur = init_model(
+            self.hexplane_cfg,
+            self.tensorf_args["aabb"],
+            self.tensorf_args["near_far"], 
+            self.device
+        )
 
         self.world2rf.append(world2rf.clone().detach())
         

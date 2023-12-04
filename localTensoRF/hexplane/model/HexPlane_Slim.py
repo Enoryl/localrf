@@ -11,6 +11,7 @@ class HexPlane_Slim(HexPlane_Base):
     2. We directly calculate densities from HexPlane without MLPs, which means  DensityMode is "plain" and density_dim = 1.
     """
 
+    # old
     def __init__(self, aabb, gridSize, device, time_grid, near_far, **kargs):
         super().__init__(aabb, gridSize, device, time_grid, near_far, **kargs)
         assert (
