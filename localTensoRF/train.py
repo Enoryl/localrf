@@ -315,7 +315,7 @@ def reconstruction(args):
         rf_lr_init=args.lr_init, # 传入
         rf_lr_basis=args.lr_basis, # 传入
         lr_decay_target_ratio=args.lr_decay_target_ratio, # 传入
-        N_voxel_list=N_voxel_list, # 传入
+        N_voxel_list=N_voxel_list, # 传入，它是根据N_voxel_init和N_voxel_final线性分割产生的数组（似乎进行了一些其他的变化？
         update_AlphaMask_list=args.update_AlphaMask_list, # 传入
         lr_upsample_reset=args.lr_upsample_reset, # 传入
         device=args.device, # 传入
@@ -453,6 +453,7 @@ def reconstruction(args):
         # ！！！此处hexplane缺少组件，损失计算会失败
         # ====应当采用hexplane中的损失计算方法？
         if  local_tensorfs.regularize:
+            # 下面的get_reg_loss需要修改一下，因为Hexplane中的density_L1被更名为了L1_loss_density
             loss_tv, l1_loss = local_tensorfs.get_reg_loss(tvreg, args.TV_weight_density, args.TV_weight_app, args.L1_weight)
             total_loss = total_loss + loss_tv + l1_loss
             writer.add_scalar("train/loss_tv", loss_tv, global_step=iteration)
@@ -591,6 +592,8 @@ def reconstruction(args):
         # 如果到达了需要渲染的迭代次数，进行渲染的操作
         if (iteration % args.vis_every == args.vis_every - 1):
             poses_mtx = local_tensorfs.get_cam2world().detach()
+            # 这里的渲染操作需要进行修改，原渲染函数肯定是无法使用的
+            # old：
             rgb_maps_tb, depth_maps_tb, gt_rgbs_tb, fwd_flow_cmp_tb, bwd_flow_cmp_tb, depth_err_tb, loc_metrics = render(
                 test_dataset,
                 poses_mtx,
@@ -605,6 +608,7 @@ def reconstruction(args):
                 start=train_dataset.active_frames_bounds[0],
                 add_frame_to_list= not args.skip_TB_images, # skip_TB_images=True if set; add_frame_to_list=False to save RAM --> not args.skip_TB_images
             )
+            # new：
 
             if len(loc_metrics.values()):
                 metrics.update(loc_metrics)

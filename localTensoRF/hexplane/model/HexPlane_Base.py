@@ -493,8 +493,14 @@ class HexPlane_Base(torch.nn.Module):
         sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
         rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
 
+        # new：
+        frame_time = frame_time.to(xyz_sampled.device)
+
         # Compute density feature and density if there are valid rays.
         if ray_valid.any():
+            # test only
+            # print(f"xyz device is {xyz_sampled.device}")
+            # print(f"frame device is {frame_time.device}")
             density_feature = self.compute_densityfeature(
                 xyz_sampled[ray_valid], frame_time[ray_valid]
             )
@@ -546,6 +552,7 @@ class HexPlane_Base(torch.nn.Module):
         return rgb_map, depth_map, alpha, z_vals
 
     # TensoRF有updateAlphaMask
+    # This is the same idea as AlphaMask in TensoRF, while we rename it for better understanding.
     @torch.no_grad()
     def updateEmptyMask(self, gridSize=(200, 200, 200), time_grid=64):
         """

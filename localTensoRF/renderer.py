@@ -150,6 +150,8 @@ def render(
             rgb_maps_tb.append(rgb_map)  # HWC
             depth_maps_tb.append(depth_map_vis)  # HWC
             poses_vis.append(pose_vis)
+        
+        # 此处rgb_maps_tb、depth_maps_tb有关的操作全部结束
 
         if test:
             fbase = train_dataset.get_frame_fbase(idx)

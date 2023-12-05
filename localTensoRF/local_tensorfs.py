@@ -277,6 +277,7 @@ class LocalTensorfs(torch.nn.Module):
     # cfg.optim.beta2 = 0.99
     # 其实这个对应的已经存在了，名为rf_optimizer
     # 所以上面的应该不用改
+    # 仅对位姿矩阵做优化
     def optimizer_step_poses_only(self, loss):
         for idx in range(len(self.r_optimizers)):
             if self.pose_linked_rf[idx] == len(self.rf_iter) - 1 and self.rf_iter[-1] < self.n_iters:
@@ -291,6 +292,7 @@ class LocalTensorfs(torch.nn.Module):
                 self.r_optimizers[idx].step()
                 self.t_optimizers[idx].step()
                 
+    # 对位姿和nerf同时进行优化
     def optimizer_step(self, loss, optimize_poses):
         if self.rf_iter[-1] == 0:
             self.lr_factor = 1
@@ -343,16 +345,17 @@ class LocalTensorfs(torch.nn.Module):
         loss.backward()
 
         # Optimize RFs
+        # 这里其实就是优化nerf的核心代码了（没错就这一句）
         self.rf_optimizer.step()
         if self.is_refining:
             for param_group in self.rf_optimizer.param_groups:
                 param_group["lr"] = param_group["lr"] * self.lr_factor
 
-        # Increase RF resolution
+        # Increase RF resolution 增加nerf的分辨率
         if self.rf_iter[-1] in self.N_voxel_list:
             n_voxels = self.N_voxel_list[self.rf_iter[-1]]
             reso_cur = N_to_reso(n_voxels, self.tensorfs[-1].aabb)
-            self.tensorfs[-1].upsample_volume_grid(reso_cur)
+            self.tensorfs[-1].upsample_volume_grid(reso_cur) # 这里应该没有问题
 
             if self.lr_upsample_reset:
                 print("reset lr to initial")
@@ -372,7 +375,11 @@ class LocalTensorfs(torch.nn.Module):
         # Update alpha mask
         if self.rf_iter[-1] in self.update_AlphaMask_list:
             reso_mask = (self.tensorfs[-1].gridSize / 2).int()
-            self.tensorfs[-1].updateAlphaMask(tuple(reso_mask))
+            # 通过hexplane的注释可以确定updateEmptyMask和updateAlphaMask的功能是一样的
+            # old
+            # self.tensorfs[-1].updateAlphaMask(tuple(reso_mask))
+            # new
+            self.tensorfs[-1].updateEmptyMask(tuple(reso_mask))
 
         for idx in range(len(self.r_optimizers)):
             if self.pose_linked_rf[idx] == len(self.rf_iter) - 1 and self.rf_iter[-1] < self.n_iters:
@@ -480,7 +487,11 @@ class LocalTensorfs(torch.nn.Module):
                 tv_loss += self.tensorfs[-1].TV_loss_app(tvreg).mean() * tv_weight
     
             if L1_weight_inital > 0:
-                l1_loss += self.tensorfs[-1].density_L1() * L1_weight_inital # 此处，hexplane没有名为density_L1的方法
+                # 此处，hexplane的density_L1的方法改名为了L1_loss_density
+                # old：
+                # l1_loss += self.tensorfs[-1].density_L1() * L1_weight_inital 
+                # new：
+                l1_loss += self.tensorfs[-1].L1_loss_density() * L1_weight_inital 
         return tv_loss, l1_loss
 
     def focal(self, W):
@@ -624,6 +635,7 @@ class LocalTensorfs(torch.nn.Module):
                 rays_o, rays_d = get_rays_lean(directions_chunk, cam2rf)
 
                 # 下面三者似乎运算结果是相同的，由此可以大致推断localrf和hexplane的数据组织方式相似
+                # e.g.
                 # rays1 = torch.cat([rays_o, rays_d], -1)
                 # rays2 = torch.cat([rays_o, rays_d], 1)
                 # rays3 = torch.cat([rays_o, rays_d], -1).view(-1, 6)

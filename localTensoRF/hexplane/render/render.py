@@ -42,6 +42,9 @@ def OctreeRender_trilinear_fast(
         depth_maps.append(depth_map)
         alphas.append(alpha_map)
         z_vals.append(z_val_map)
+
+    # 相比于TensoRF的OctreeRender_trilinear_fast，返回值不同，此外其余的内容基本相同
+    # cat操作将张量的序列合并成了一个张量
     return (
         torch.cat(rgbs),
         torch.cat(alphas),
@@ -90,6 +93,7 @@ def evaluation(
         W, H = test_dataset.img_wh
         rays = samples.view(-1, samples.shape[-1])
         times = sample_times.view(-1, sample_times.shape[-1])
+        # 此处获得rgb_map和depth_map，还可以看出OctreeRedner传出的另外三个数值是没有被使用的
         rgb_map, _, depth_map, _, _ = OctreeRender_trilinear_fast(
             rays,
             times,
