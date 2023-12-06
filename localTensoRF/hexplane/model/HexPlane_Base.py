@@ -493,6 +493,7 @@ class HexPlane_Base(torch.nn.Module):
         sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
         rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
 
+        # 这里因为会报错两个变量不在同一设备上，因此添加
         # new：
         frame_time = frame_time.to(xyz_sampled.device)
 

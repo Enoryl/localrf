@@ -62,8 +62,28 @@ def render(
         else:
             view_ids = frame_indices[idx][None]
 
+        # 这里要加上时间的信息
+        # old：
+        # rgb_map, depth_map, directions, ij = local_tensorfs(
+        #     rays_ids,
+        #     view_ids,
+        #     W,
+        #     H,
+        #     is_train=False,
+        #     cam2world=None if test else poses_mtx[i][None],
+        #     world2rf=world2rf,
+        #     blending_weights=None,
+        #     test_id=test or is_test_id[view_ids.item()],
+        #     chunk=args.batch_size,
+        #     floater_thresh=floater_thresh,
+        # )
+        # test_dataset.all_invdepths[test_dataset.all_fbases[fbase]]
+        # new：
+        fbase = train_dataset.get_frame_fbase(idx)
+        time_record = test_dataset.all_times[test_dataset.all_fbases[fbase]]
         rgb_map, depth_map, directions, ij = local_tensorfs(
             rays_ids,
+            time_record,
             view_ids,
             W,
             H,
@@ -74,7 +94,7 @@ def render(
             test_id=test or is_test_id[view_ids.item()],
             chunk=args.batch_size,
             floater_thresh=floater_thresh,
-        )              
+        )               
         
         if test and add_frame_to_list:
             fbase = train_dataset.get_frame_fbase(idx)
@@ -155,7 +175,8 @@ def render(
 
         if test:
             fbase = train_dataset.get_frame_fbase(idx)
-            gt_rgb = test_dataset.all_rgbs[test_dataset.all_fbases[fbase]]
+            # 通过fbase指定文件名称，然后根据all_fbase字典获得序号，再根据序号获取对应的值
+            gt_rgb = test_dataset.all_rgbs[test_dataset.all_fbases[fbase]] # 这里？
             gt_rgb = cv2.resize(gt_rgb, (W, H))
             gt_rgb = torch.from_numpy(gt_rgb)
             if add_frame_to_list:

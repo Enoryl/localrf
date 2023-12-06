@@ -88,6 +88,7 @@ def render_frames(
             start=0
         )
 
+    # 自动渲染路径应当调用的是这里
     if args.render_path:
         c2ws = smooth_poses_spline(poses_mtx, median_prefilter=True)
         os.makedirs(f"{logfolder}/smooth_spline", exist_ok=True)
@@ -592,8 +593,8 @@ def reconstruction(args):
         # 如果到达了需要渲染的迭代次数，进行渲染的操作
         if (iteration % args.vis_every == args.vis_every - 1):
             poses_mtx = local_tensorfs.get_cam2world().detach()
-            # 这里的渲染操作需要进行修改，原渲染函数肯定是无法使用的
-            # old：
+            # 这里的渲染操作需要进行修改，直接使用原渲染函数肯定是有问题的
+            # 但是这里在render函数内做了一些修改，其内部根据train_dataset给定了相应的time_rescord所以这里暂时不需要修改
             rgb_maps_tb, depth_maps_tb, gt_rgbs_tb, fwd_flow_cmp_tb, bwd_flow_cmp_tb, depth_err_tb, loc_metrics = render(
                 test_dataset,
                 poses_mtx,
@@ -608,7 +609,6 @@ def reconstruction(args):
                 start=train_dataset.active_frames_bounds[0],
                 add_frame_to_list= not args.skip_TB_images, # skip_TB_images=True if set; add_frame_to_list=False to save RAM --> not args.skip_TB_images
             )
-            # new：
 
             if len(loc_metrics.values()):
                 metrics.update(loc_metrics)
@@ -692,6 +692,8 @@ def reconstruction(args):
         local_tensorfs.save(f)
 
     poses_mtx = local_tensorfs.get_cam2world().detach()
+    # TODO:这里应该也需要修改
+    # 最后是这里，渲染虚拟路径的成像时，如何指定time_record？
     render_frames(args, poses_mtx, local_tensorfs, logfolder, test_dataset=test_dataset, train_dataset=train_dataset)
 
 

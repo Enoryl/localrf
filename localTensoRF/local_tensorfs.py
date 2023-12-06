@@ -524,7 +524,7 @@ class LocalTensorfs(torch.nn.Module):
     def forward(
         self,
         ray_ids,
-        time_record,
+        time_record, # new
         view_ids,
         W,
         H,
@@ -661,6 +661,9 @@ class LocalTensorfs(torch.nn.Module):
                 # new  
                 # 用不用renderer.py里面的OctreeRender？
                 # 想一下这里的时间输入对不对
+                # 就输入结果而言，HexPlane肯定是需要直接的时间信息的
+                # 但这里是否需要根据ray的索引来指定特定的时间？（应当是需要的）
+                # localrf最终使用的rays似乎与传入的ray_ids的值没有关联，全篇使用ray_ids时，只用了和它形状有关的属性
                 rgb_map_t, depth_map_t, alpha_map, z_val_map = self.tensorfs[rf_id](
                     rays,
                     time_record,

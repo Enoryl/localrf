@@ -110,6 +110,7 @@ class LocalRFDataset(Dataset):
         # num_images理所应当的是image_paths的长度
         self.num_images = len(self.image_paths)
         # 所有的fbase
+        # ！！！文件名：索引
         self.all_fbases = {os.path.splitext(image_path)[0]: idx for idx, image_path in enumerate(self.image_paths)}
 
         self.white_bg = False # 默认white_bg为False
@@ -160,6 +161,9 @@ class LocalRFDataset(Dataset):
         self.active_frames_bounds[0] = first_frame
 
         self.all_rgbs = self.all_rgbs[n_frames * self.n_px_per_frame:] 
+        # 这里会不会也要限制all_times？
+        # new
+        self.all_times = self.all_times[n_frames:]
         if self.load_depth:
             self.all_invdepths = self.all_invdepths[n_frames * self.n_px_per_frame:]
         if self.load_flow:
@@ -315,7 +319,7 @@ class LocalRFDataset(Dataset):
         # 每张图片的像素总数
         self.n_px_per_frame = self.img_wh[0] * self.img_wh[1]
 
-        # 如果是训练集
+        # 如果不是训练集
         if self.split != "train": # 使用np.stack进行堆叠
             self.all_rgbs = np.stack(all_rgbs, 0)
             if self.load_depth:
@@ -325,7 +329,7 @@ class LocalRFDataset(Dataset):
                 self.all_fwd_mask = np.stack(all_fwd_mask, 0)
                 self.all_bwd_flow = np.stack(all_bwd_flow, 0)
                 self.all_bwd_mask = np.stack(all_bwd_mask, 0)
-        else: # 如果不是训练集
+        else: # 如果是训练集
             # 使用concatenate_append进行堆叠
             self.all_rgbs = concatenate_append(self.all_rgbs, all_rgbs, 3)
             if self.load_depth:
