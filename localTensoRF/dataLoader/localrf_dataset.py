@@ -128,6 +128,7 @@ class LocalRFDataset(Dataset):
         # new：
         # 时间，起始帧时间为0.0，末尾帧时间为1.0
         self.all_times = torch.linspace(0.0, 1.0, self.image_num).numpy()
+        self.time_processed = False
 
         self.active_frames_bounds = [0, 0]
         self.loaded_frames = 0

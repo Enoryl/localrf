@@ -474,6 +474,8 @@ class HexPlane_Base(torch.nn.Module):
         viewdirs = viewdirs / rays_norm
 
         viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
+        # 这里会报错，说view可以接收0~2个参数，但这里提供了3个
+        # 不过前面也用了这里的代码，所以这里应当不用更改
         frame_time = frame_time.view(-1, 1, 1).expand(
             xyz_sampled.shape[0], xyz_sampled.shape[1], 1
         )

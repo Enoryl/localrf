@@ -524,7 +524,7 @@ class LocalTensorfs(torch.nn.Module):
     def forward(
         self,
         ray_ids,
-        time_record, # new
+        time_record, # new，传进来的time_record还需要处理一下，直接使用会报错
         view_ids,
         W,
         H,
@@ -646,6 +646,14 @@ class LocalTensorfs(torch.nn.Module):
                 # 模型替换为了HexPlane，因此这里也要做出修改
                 # -----------------------------------------训练--------------------------------------------
 
+                # 处理时间
+                # new：
+                time_data = []
+                for times in time_record:
+                    cur_time = torch.tensor(times).expand(rays_o.shape[0], 1)
+                    time_data += [cur_time]
+                time_data = time_data * 2.0 - 1.0
+
                 # old
                 # rgb_map_t, depth_map_t = self.tensorfs[rf_id](
                 #     rays,
@@ -666,7 +674,7 @@ class LocalTensorfs(torch.nn.Module):
                 # localrf最终使用的rays似乎与传入的ray_ids的值没有关联，全篇使用ray_ids时，只用了和它形状有关的属性
                 rgb_map_t, depth_map_t, alpha_map, z_val_map = self.tensorfs[rf_id](
                     rays,
-                    time_record,
+                    time_data,
                     is_train=is_train,
                     white_bg=white_bg,
                     N_samples=-1,

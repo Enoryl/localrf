@@ -54,6 +54,7 @@ def render(
     N_rays_all = W * H
     rays_ids = torch.arange(N_rays_all, dtype=torch.long, device=poses_mtx.device)
     metrics = {}
+    # 这里有一个输出
     print(f"Render {len(idxs)} frame with size {W} x {H}")
     for i, idx in tqdm(enumerate(idxs)):
         torch.cuda.empty_cache()
