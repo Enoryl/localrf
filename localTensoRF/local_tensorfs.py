@@ -650,8 +650,12 @@ class LocalTensorfs(torch.nn.Module):
                 # new：
                 time_data = []
                 for times in time_record:
-                    cur_time = torch.tensor(times).expand(rays_o.shape[0], 1)
+                    # 这里应该是不需要expand的，因为已经分割对应到了各个帧中
+                    cur_time = torch.tensor(times)#.expand(rays_o.shape[0], 1)
                     time_data += [cur_time]
+
+                time_data = torch.tensor(time_data).unsqueeze(1)
+                # time_data = torch.cat(time_data, 0)
                 time_data = time_data * 2.0 - 1.0
 
                 # old
