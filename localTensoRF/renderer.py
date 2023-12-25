@@ -81,7 +81,15 @@ def render(
         # test_dataset.all_invdepths[test_dataset.all_fbases[fbase]]
         # new：
         fbase = train_dataset.get_frame_fbase(idx)
-        time_record = test_dataset.all_times[test_dataset.all_fbases[fbase]]
+        time_record = []
+        # time_record += [test_dataset.all_times[test_dataset.all_fbases[fbase]]]
+        if test :
+            time_record += [test_dataset.all_times[test_dataset.all_fbases[fbase]]]
+        else:
+            tmp = int(fbase) - int(train_dataset.get_frame_fbase(0))
+            # import pdb;pdb.set_trace()
+            time_record += [test_dataset.all_times[tmp]]
+
         rgb_map, depth_map, directions, ij = local_tensorfs(
             rays_ids,
             time_record,

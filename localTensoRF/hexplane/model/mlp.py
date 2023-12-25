@@ -62,12 +62,21 @@ class General_MLP(torch.nn.Module):
             self.in_mlpC += 3 + 2 * view_pe * 3
 
         assert n_layers >= 2  # Assert at least two layers of MLP
-        layers = [torch.nn.Linear(self.in_mlpC, featureC), torch.nn.ReLU(inplace=True)]
+
+        # new
+        device = torch.device("cuda:0")
+
+        layers = [torch.nn.Linear(self.in_mlpC, featureC).to(device), torch.nn.ReLU(inplace=True).to(device)]
 
         for _ in range(n_layers - 2):
-            layers += [torch.nn.Linear(featureC, featureC), torch.nn.ReLU(inplace=True)]
-        layers += [torch.nn.Linear(featureC, outChanel)]
+            layers += [torch.nn.Linear(featureC, featureC).to(device), torch.nn.ReLU(inplace=True).to(device)]
+        layers += [torch.nn.Linear(featureC, outChanel).to(device)]
+
         self.mlp = torch.nn.Sequential(*layers)
+
+        # new
+        device = torch.device("cuda:0")
+        self.mlp.to(device)
 
         if zero_init:
             torch.nn.init.constant_(self.mlp[-1].bias, 0)
@@ -84,6 +93,7 @@ class General_MLP(torch.nn.Module):
         """
         # Collect input data
         indata = [features]
+
         if self.use_t:
             indata += [frame_time]
             if self.t_pe > 0:
@@ -101,8 +111,12 @@ class General_MLP(torch.nn.Module):
                 indata += [positional_encoding(viewdirs, self.view_pe)]
         mlp_in = torch.cat(indata, dim=-1)
 
+        # new
+        device = torch.device("cuda:0")
+        mlp_in.to(device)
+
         rgb = self.mlp(mlp_in)
         if self.use_sigmoid:
             rgb = torch.sigmoid(rgb)
 
-        return rgb
+        return rgb.to(device)

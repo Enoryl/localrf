@@ -182,6 +182,11 @@ class HexPlane_Slim(HexPlane_Base):
             .detach()
             .view(3, -1, 1, 2)
         )
+        # 防止后面报错变量不在同一设备上
+        # new:
+        device = torch.device("cuda:0")
+        plane_coord.to(device)
+
         # line_time_coord: (3, B, 1, 2) coordinates for spatial-temporal planes, where line_time_coord[:, 0, 0, :] = [[t, z], [t, y], [t, x]].
         line_time_coord = torch.stack(
             (
@@ -197,15 +202,23 @@ class HexPlane_Slim(HexPlane_Base):
             .detach()
             .view(3, -1, 1, 2)
         )
+        # new
+        line_time_coord.to(device)
 
         density_feature = torch.zeros(
             (xyz_sampled.shape[0],), device=xyz_sampled.device
         )
+        # new
+        density_feature.to(device)
+        self.density_plane.to(device)
+        self.density_line_time.to(device)
+        self.density_basis_mat.to(device)
+        
         for idx_plane in range(len(self.density_plane)):
             # Spatial Plane Feature: Grid sampling on density plane[idx_plane] given coordinates plane_coord[idx_plane].
             plane_feat = F.grid_sample(
-                self.density_plane[idx_plane],
-                plane_coord[[idx_plane]],
+                self.density_plane[idx_plane], # cuda
+                plane_coord[[idx_plane]], # cpu
                 align_corners=self.align_corners,
             ).view(-1, *xyz_sampled.shape[:1])
             # Spatial-Temoral Feature: Grid sampling on density line_time[idx_plane] plane given coordinates line_time_coord[idx_plane].
@@ -262,6 +275,12 @@ class HexPlane_Slim(HexPlane_Base):
             .detach()
             .view(3, -1, 1, 2)
         )
+
+        # new
+        device = torch.device("cuda:0")
+        self.app_plane.to(device)
+        self.app_line_time.to(device)
+        self.app_basis_mat.to(device)
 
         plane_feat, line_time_feat = [], []
         for idx_plane in range(len(self.app_plane)):

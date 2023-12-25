@@ -129,7 +129,8 @@ class LocalTensorfs(torch.nn.Module):
             "nonsquare_type": "normal",
             # localrf中有upsamp_list，值为[100, 150, 200, 250, 300]
             # hexplane中的upsample_list为[3000， 6000， 9000]
-            "upsample_list": [3000, 6000, 9000],
+            # "upsample_list": [3000, 6000, 9000],
+            "upsample_list": [3000, 4500, 6000, 7500, 9000],
             "update_emptymask_list": [4000, 8000, 10000],
             # localrf中名为n_lamb_sigma，值为[8, 8, 8]
             # hexplane为[24, 24, 24]
@@ -187,12 +188,15 @@ class LocalTensorfs(torch.nn.Module):
         self.is_refining = False
         if len(self.tensorfs) > 0:
             n_overlap = min(n_added_frames, self.n_overlap, self.blending_weights.shape[0] - 1)
+
+            # new:device
+            device = torch.device("cuda:0")
             weights_overlap = 1 / n_overlap + torch.arange(
                 0, 1, 1 / n_overlap
-            )
+            ).to(device)
             self.blending_weights.requires_grad = False
             self.blending_weights[-n_overlap :, -1] = 1 - weights_overlap
-            new_blending_weights = torch.zeros_like(self.blending_weights[:, 0:1])
+            new_blending_weights = torch.zeros_like(self.blending_weights[:, 0:1]).to(device)# new
             new_blending_weights[-n_overlap :, 0] = weights_overlap
             self.blending_weights = torch.nn.Parameter(
                 torch.cat([self.blending_weights, new_blending_weights], dim=1),
@@ -355,7 +359,11 @@ class LocalTensorfs(torch.nn.Module):
         if self.rf_iter[-1] in self.N_voxel_list:
             n_voxels = self.N_voxel_list[self.rf_iter[-1]]
             reso_cur = N_to_reso(n_voxels, self.tensorfs[-1].aabb)
-            self.tensorfs[-1].upsample_volume_grid(reso_cur) # 这里应该没有问题
+            # old
+            # self.tensorfs[-1].upsample_volume_grid(reso_cur) # 这里应该没有问题
+            # new
+            time_grid = self.tensorfs[-1].Time_grid_list.pop(0)
+            self.tensorfs[-1].upsample_volume_grid(reso_cur, time_grid) # 这里应该没有问题
 
             if self.lr_upsample_reset:
                 print("reset lr to initial")
@@ -572,7 +580,8 @@ class LocalTensorfs(torch.nn.Module):
             # 若非is_train，则将blending_weights在纵向上求和后取值不为0的坐标，然后去第一行（？）转为列表保存到active_rf_ids
             active_rf_ids = torch.nonzero(torch.sum(blending_weights, dim=0))[:, 0].tolist()
         # ij就是将ij在dim=1上stack起来
-        ij = torch.stack([i, j], dim=-1)
+        device = torch.device("cuda:0") # new
+        ij = torch.stack([i, j], dim=-1).to(device)
         # 如果没有正在活跃的rf，则直接返回，通常来说不会运行到此分支
         if len(active_rf_ids) == 0:
             print("****** No valid RF")
@@ -609,9 +618,9 @@ class LocalTensorfs(torch.nn.Module):
         # 也对blending_weights_expanded用repeat_interleave进行扩展
         blending_weights_expanded = blending_weights.repeat_interleave(ray_ids.shape[0] // view_ids.shape[0], dim=0)
         # 以directions的shape为模板创建rgbs
-        rgbs = torch.zeros_like(directions) 
+        rgbs = torch.zeros_like(directions).to(device) # new 
         # 以directions去掉channel维度的形状为模板创建depth_maps 
-        depth_maps = torch.zeros_like(directions[..., 0]) 
+        depth_maps = torch.zeros_like(directions[..., 0]).to(device) # new 
         # 创建N_rays_all
         N_rays_all = ray_ids.shape[0]
         # 修改chunk值，其初始值（如过没有传入的话）为16384
@@ -642,6 +651,10 @@ class LocalTensorfs(torch.nn.Module):
 
                 rays = torch.cat([rays_o, rays_d], -1).view(-1, 6)
 
+                # new:
+                device = torch.device("cuda:0")
+                rays.to(device)
+
                 # 需要传入的数据项只有ray，其他的均为参数
                 # 模型替换为了HexPlane，因此这里也要做出修改
                 # -----------------------------------------训练--------------------------------------------
@@ -653,10 +666,10 @@ class LocalTensorfs(torch.nn.Module):
                     # 这里应该是不需要expand的，因为已经分割对应到了各个帧中
                     cur_time = torch.tensor(times)#.expand(rays_o.shape[0], 1)
                     time_data += [cur_time]
-
                 time_data = torch.tensor(time_data).unsqueeze(1)
                 # time_data = torch.cat(time_data, 0)
                 time_data = time_data * 2.0 - 1.0
+                time_data.to(device)
 
                 # old
                 # rgb_map_t, depth_map_t = self.tensorfs[rf_id](
@@ -728,4 +741,4 @@ class LocalTensorfs(torch.nn.Module):
         # clamp是将对应tensor的值“夹”在给定的范围之间，若大于则直接取范围上的最大值，小于则直接取范围上的最小值
         rgbs = rgbs.clamp(0, 1)
 
-        return rgbs, depth_maps, directions, ij
+        return rgbs.to(device), depth_maps.to(device), directions.to(device), ij.to(device)

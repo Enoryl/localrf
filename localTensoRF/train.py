@@ -366,7 +366,7 @@ def reconstruction(args):
         ray_idx = torch.from_numpy(data_blob["idx"]).to(args.device) # 用于local_tensorfs的输入
         # new
         # 传出的时间序列速出
-        time_record = torch.from_numpy(data_blob["time"])
+        time_record = torch.from_numpy(data_blob["time"]).to(args.device)
 
         # lr_factor=1，每次以rf_iter的最后一个元素为指数进行运算
         reg_loss_weight = local_tensorfs.lr_factor ** (local_tensorfs.rf_iter[-1])
@@ -576,6 +576,7 @@ def reconstruction(args):
         if iteration % args.progress_refresh_rate == 0:
             # All poses visualization
             poses_mtx = local_tensorfs.get_cam2world().detach().cpu()
+            # print(poses_mtx)
             t_w2rf = torch.stack(list(local_tensorfs.world2rf), dim=0).detach().cpu()
             RF_mtx_inv = torch.cat([torch.stack(len(t_w2rf) * [torch.eye(3)]), -t_w2rf.clone()[..., None]], axis=-1)
 
@@ -593,8 +594,13 @@ def reconstruction(args):
         # 如果到达了需要渲染的迭代次数，进行渲染的操作
         if (iteration % args.vis_every == args.vis_every - 1):
             poses_mtx = local_tensorfs.get_cam2world().detach()
+
+            # new:device
+            device = torch.device("cuda:0")
+            poses_mtx.to(device)
             # 这里的渲染操作需要进行修改，直接使用原渲染函数肯定是有问题的
             # 但是这里在render函数内做了一些修改，其内部根据train_dataset给定了相应的time_rescord所以这里暂时不需要修改
+            
             rgb_maps_tb, depth_maps_tb, gt_rgbs_tb, fwd_flow_cmp_tb, bwd_flow_cmp_tb, depth_err_tb, loc_metrics = render(
                 test_dataset,
                 poses_mtx,

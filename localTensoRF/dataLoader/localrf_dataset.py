@@ -74,6 +74,10 @@ class LocalRFDataset(Dataset):
             self.image_paths = sorted(os.listdir(os.path.join(self.root_dir, "images")))
             # new：用于后续时间统计的变量
             self.image_num = len(self.image_paths)
+        # new：
+        # 时间，起始帧时间为0.0，末尾帧时间为1.0
+        self.all_times = torch.linspace(0.0, 1.0, len(self.image_paths)).numpy()
+        self.time_processed = False
         
         if subsequence != [0, -1]: # 这个应该总是满足相等，因此不会进入这里
             self.image_paths = self.image_paths[subsequence[0]:subsequence[1]]
@@ -119,16 +123,14 @@ class LocalRFDataset(Dataset):
         self.near_far = [0.1, 1e3] # Dummi
         # scene_bbox=[[-2, -2, -2], [2, 2, 2]]
         self.scene_bbox = 2 * torch.tensor([[-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]])
+        device = torch.device("cuda:0")
+        self.scene_bbox.to(device)
 
         # 初始化一些最后要返回的变量为None
         self.all_rgbs = None
         self.all_invdepths = None
         self.all_fwd_flow, self.all_fwd_mask, self.all_bwd_flow, self.all_bwd_mask = None, None, None, None
         self.all_loss_weights = None
-        # new：
-        # 时间，起始帧时间为0.0，末尾帧时间为1.0
-        self.all_times = torch.linspace(0.0, 1.0, self.image_num).numpy()
-        self.time_processed = False
 
         self.active_frames_bounds = [0, 0]
         self.loaded_frames = 0

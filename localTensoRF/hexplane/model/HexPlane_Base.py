@@ -3,6 +3,10 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn
+
+# new:
+import numpy as np
+
 from torch.nn import functional as F
 
 from hexplane.model.mlp import General_MLP
@@ -145,6 +149,19 @@ class HexPlane_Base(torch.nn.Module):
         # Coordinate normalization type.
         self.normalize_type = normalize_type # 额外的参数
 
+        # new:
+        self.Time_grid_list = (
+            torch.round(
+                torch.exp(
+                    torch.linspace(
+                        np.log(kwargs["time_grid_init"]),
+                        np.log(kwargs["time_grid_final"]),
+                        len(kwargs["upsample_list"]) + 1,
+                    )
+                )
+            ).long()
+        ).tolist()[1:]
+        
         # Plane initialization.
         self.init_planes(gridSize[0], device) # 这里要用到前面传入的device
         #---------------------------------------------------调用函数init_planes
@@ -520,11 +537,21 @@ class HexPlane_Base(torch.nn.Module):
         )  # alpha is the opacity, weight is the accumulated weight. bg_weight is the accumulated weight for last sampling point.
 
         # Compute appearance feature and rgb if there are valid rays (whose weight are above a threshold).
+        # new:
+        device = torch.device("cuda:0")
+        xyz_sampled.to(device)
+        frame_time.to(device)
+        viewdirs.to(device)
+
         app_mask = weight > self.rayMarch_weight_thres
         if app_mask.any():
             app_features = self.compute_appfeature(
                 xyz_sampled[app_mask], frame_time[app_mask]
             )
+            # new:
+            app_features.to(device)
+            app_mask.to(device)
+            
             valid_rgbs = self.app_regressor(
                 xyz_sampled[app_mask],
                 viewdirs[app_mask],
@@ -646,3 +673,25 @@ class HexPlane_Base(torch.nn.Module):
         emptiness = 1 - torch.exp(-sigma * length).view(xyz_locs.shape[:-1])
 
         return emptiness
+    
+
+    def get_kwargs(self):
+        return {
+            "aabb": self.aabb,#
+            "gridSize": self.gridSize.tolist(),#
+            "density_n_comp": self.density_n_comp,#
+            "appearance_n_comp": self.app_n_comp,#
+            "app_dim": 3,
+            "density_shift": None,
+            'alphaMask_thres': 0.001,
+            "distance_scale": 25.0,
+            "rayMarch_weight_thres": 0.0001,
+            "fea2denseAct": self.fea2denseAct,#
+            "near_far": self.near_far,#
+            "step_ratio": 0.5,
+            "shadingMode": "MLP_Fea_late_view",
+            "pos_pe": 0,
+            "view_pe": 0,
+            "fea_pe": 0,
+            "featureC": 128,
+        }
